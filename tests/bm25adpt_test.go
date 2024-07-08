@@ -1,7 +1,11 @@
 package bm25
 
 import (
-	"testing"
+    "log"
+    "os"
+    "strings"
+    "bm25"
+    "testing"
 )
 
 func TestNewBM25Adpt(t *testing.T) {
