@@ -1,6 +1,9 @@
 package bm25
 
-import "sync"
+import (
+    "errors"
+    "sync"
+)
 
 // GetScoresBatched returns the BM25 scores for the given query using parallel computation with batching.
 func (b *bm25Base) GetScoresBatched(query []string, bm25 BM25, batchSize int) ([]float64, error) {
@@ -19,13 +22,21 @@ func (b *bm25Base) GetScoresBatched(query []string, bm25 BM25, batchSize int) ([
 
     for i := 0; i < numBatches; i++ {
         start := i * batchSize
-        end := min(start+batchSize, b.corpusSize)
+        end := Min(start+batchSize, b.corpusSize)
         go func(start, end int) {
             defer wg.Done()
             for _, q := range query {
                 qFreq := make([]float64, end-start)
                 for j := start; j < end; j++ {
-                    qFreq[j-start] = float64(countTermFreq(q, b.corpus[j]))
+                    doc := JoinTokens(b.corpus[j], " ")
+                    freq, err := CountTermFreq(q, doc, b.tokenizer)
+                    if err != nil {
+                        if b.logger != nil {
+                            b.logger.Printf("Error counting term frequency for term '%s' in document %d: %v", q, j, err)
+                        }
+                        continue
+                    }
+                    qFreq[j-start] = float64(freq)
                 }
 
                 idf, err := b.IDF(q)
@@ -70,7 +81,7 @@ func (b *bm25Base) GetBatchScoresBatched(query []string, docIDs []int, bm25 BM25
 
     for i := 0; i < numBatches; i++ {
         start := i * batchSize
-        end := min(start+batchSize, len(docIDs))
+        end := Min(start+batchSize, len(docIDs))
         go func(start, end int) {
             defer wg.Done()
             for _, q := range query {
@@ -83,7 +94,15 @@ func (b *bm25Base) GetBatchScoresBatched(query []string, docIDs []int, bm25 BM25
                         }
                         continue
                     }
-                    qFreq[j-start] = float64(countTermFreq(q, b.corpus[docID]))
+                    doc := JoinTokens(b.corpus[docID], " ")
+                    freq, err := CountTermFreq(q, doc, b.tokenizer)
+                    if err != nil {
+                        if b.logger != nil {
+                            b.logger.Printf("Error counting term frequency for term '%s' in document %d: %v", q, docID, err)
+                        }
+                        continue
+                    }
+                    qFreq[j-start] = float64(freq)
                 }
 
                 idf, err := b.IDF(q)
@@ -133,11 +152,14 @@ func (b *bm25Base) GetTopNBatched(query []string, n int, bm25 BM25, batchSize in
         return nil, err
     }
 
-    topNIndices := topNIndices(scores, n)
+    topNIndices, err := TopNIndices(scores, n)
+    if err != nil {
+        return nil, err
+    }
 
     topDocs := make([]string, len(topNIndices))
     for i, idx := range topNIndices {
-        topDocs[i] = joinTokens(b.corpus[idx])
+        topDocs[i] = JoinTokens(b.corpus[idx], " ")
     }
 
     return topDocs, nil

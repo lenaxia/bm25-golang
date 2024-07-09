@@ -20,7 +20,9 @@ func (b *bm25Base) GetScoresParallel(query []string, bm25 BM25) ([]float64, erro
             defer wg.Done()
             qFreq := make([]float64, b.corpusSize)
             for i, doc := range b.corpus {
-                qFreq[i] = float64(countTermFreq(q, doc))
+                docStr := JoinTokens(doc, " ")
+                freq, _ := CountTermFreq(q, docStr, b.tokenizer) // Ignore the error for now
+                qFreq[i] = float64(freq)
             }
 
             idf, err := b.IDF(q)
@@ -103,7 +105,9 @@ func (b *bm25Base) GetBatchScoresParallel(query []string, docIDs []int, bm25 BM2
                     }
                     continue
                 }
-                qFreq[i] = float64(countTermFreq(q, b.corpus[docID]))
+                docStr := JoinTokens(b.corpus[docID], " ")
+                freq, _ := CountTermFreq(q, docStr, b.tokenizer) // Ignore the error for now
+                qFreq[i] = float64(freq)
             }
 
             idf, err := b.IDF(q)
@@ -147,11 +151,14 @@ func (b *bm25Base) GetTopNParallel(query []string, n int, bm25 BM25) ([]string, 
         return nil, err
     }
 
-    topNIndices := topNIndices(scores, n)
+    topNIndices, err := TopNIndices(scores, n)
+    if err != nil {
+        return nil, err
+    }
 
     topDocs := make([]string, len(topNIndices))
     for i, idx := range topNIndices {
-        topDocs[i] = joinTokens(b.corpus[idx])
+        topDocs[i] = JoinTokens(b.corpus[idx], " ")
     }
 
     return topDocs, nil

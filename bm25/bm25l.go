@@ -44,7 +44,9 @@ func (l *BM25L) GetScores(query []string) ([]float64, error) {
     for _, q := range query {
         qFreq := make([]float64, l.corpusSize)
         for i, doc := range l.corpus {
-            qFreq[i] = float64(countTermFreq(q, doc))
+            docStr := JoinTokens(doc, " ")
+            freq, _ := CountTermFreq(q, docStr, l.tokenizer) // Ignore the error for now
+            qFreq[i] = float64(freq)
         }
 
         idf, err := l.IDF(q)
@@ -84,7 +86,9 @@ func (l *BM25L) GetBatchScores(query []string, docIDs []int) ([]float64, error) 
                 }
                 continue
             }
-            qFreq[i] = float64(countTermFreq(q, l.corpus[docID]))
+            docStr := JoinTokens(l.corpus[docID], " ")
+            freq, _ := CountTermFreq(q, docStr, l.tokenizer) // Ignore the error for now
+            qFreq[i] = float64(freq)
         }
 
         idf, err := l.IDF(q)
@@ -126,11 +130,14 @@ func (l *BM25L) GetTopN(query []string, n int) ([]string, error) {
         return nil, err
     }
 
-    topNIndices := topNIndices(scores, n)
+    topNIndices, err := TopNIndices(scores, n)
+    if err != nil {
+        return nil, err
+    }
 
     topDocs := make([]string, len(topNIndices))
     for i, idx := range topNIndices {
-        topDocs[i] = joinTokens(l.corpus[idx])
+        topDocs[i] = JoinTokens(l.corpus[idx], " ")
     }
 
     return topDocs, nil

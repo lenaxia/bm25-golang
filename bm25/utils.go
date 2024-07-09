@@ -45,7 +45,7 @@ func TopNIndices(scores []float64, n int) ([]int, error) {
         return scores[indices[i]] > scores[indices[j]]
     })
 
-    return indices[:min(n, len(indices))], nil
+    return indices[:Min(n, len(indices))], nil
 }
 
 // JoinTokens joins the tokens in a document into a single string using the provided separator.

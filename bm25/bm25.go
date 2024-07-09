@@ -107,7 +107,7 @@ func (b *bm25Base) IDF(term string) (float64, error) {
         return 0, errors.New("invalid term frequency for term: " + term)
     }
 
-    idf := math.Log(float64(b.corpusSize-termFreq+0.5) / float64(termFreq+0.5))
+    idf := math.Log((float64(b.corpusSize) - float64(termFreq) + 0.5) / (float64(termFreq) + 0.5))
     b.idfCache[term] = idf
 
     if b.logger != nil {
