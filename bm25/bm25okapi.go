@@ -5,15 +5,15 @@ import (
     "log"
 )
 
-// BM25L is an implementation of the BM25L variant.
-type BM25L struct {
+// BM25Okapi is an implementation of the Okapi BM25 variant.
+type BM25Okapi struct {
     *bm25Base
     k1 float64
     b  float64
 }
 
-// NewBM25L creates a new instance of the BM25L struct.
-func NewBM25L(corpus []string, tokenizer func(string) []string, k1 float64, b float64, logger *log.Logger) (*BM25L, error) {
+// NewBM25Okapi creates a new instance of the BM25Okapi struct.
+func NewBM25Okapi(corpus []string, tokenizer func(string) []string, k1 float64, b float64, logger *log.Logger) (*BM25Okapi, error) {
     if k1 < 0 {
         return nil, errors.New("k1 must be non-negative")
     }
@@ -27,7 +27,7 @@ func NewBM25L(corpus []string, tokenizer func(string) []string, k1 float64, b fl
         return nil, err
     }
 
-    return &BM25L{
+    return &BM25Okapi{
         bm25Base: base,
         k1:       k1,
         b:        b,
@@ -35,28 +35,28 @@ func NewBM25L(corpus []string, tokenizer func(string) []string, k1 float64, b fl
 }
 
 // GetScores returns the BM25 scores for the given query.
-func (l *BM25L) GetScores(query []string) ([]float64, error) {
+func (o *BM25Okapi) GetScores(query []string) ([]float64, error) {
     if len(query) == 0 {
         return nil, errors.New("query cannot be empty")
     }
 
-    scores := make([]float64, l.corpusSize)
+    scores := make([]float64, o.corpusSize)
     for _, q := range query {
-        qFreq := make([]float64, l.corpusSize)
-        for i, doc := range l.corpus {
+        qFreq := make([]float64, o.corpusSize)
+        for i, doc := range o.corpus {
             qFreq[i] = float64(countTermFreq(q, doc))
         }
 
-        idf, err := l.IDF(q)
+        idf, err := o.IDF(q)
         if err != nil {
-            if l.logger != nil {
-                l.logger.Printf("Error calculating IDF for term '%s': %v", q, err)
+            if o.logger != nil {
+                o.logger.Printf("Error calculating IDF for term '%s': %v", q, err)
             }
             continue
         }
 
-        for i, docLen := range l.docLengths {
-            k := l.k1 * (1 - l.b + l.b*float64(docLen)/l.avgDocLen)
+        for i, docLen := range o.docLengths {
+            k := o.k1 * (1 - o.b + o.b*float64(docLen)/o.avgDocLen)
             scores[i] += idf * (qFreq[i] / (qFreq[i] + k))
         }
     }
@@ -65,7 +65,7 @@ func (l *BM25L) GetScores(query []string) ([]float64, error) {
 }
 
 // GetBatchScores returns the BM25 scores for the given query and a subset of documents.
-func (l *BM25L) GetBatchScores(query []string, docIDs []int) ([]float64, error) {
+func (o *BM25Okapi) GetBatchScores(query []string, docIDs []int) ([]float64, error) {
     if len(query) == 0 {
         return nil, errors.New("query cannot be empty")
     }
@@ -78,29 +78,29 @@ func (l *BM25L) GetBatchScores(query []string, docIDs []int) ([]float64, error) 
     for _, q := range query {
         qFreq := make([]float64, len(docIDs))
         for i, docID := range docIDs {
-            if docID < 0 || docID >= l.corpusSize {
-                if l.logger != nil {
-                    l.logger.Printf("Invalid document ID: %d", docID)
+            if docID < 0 || docID >= o.corpusSize {
+                if o.logger != nil {
+                    o.logger.Printf("Invalid document ID: %d", docID)
                 }
                 continue
             }
-            qFreq[i] = float64(countTermFreq(q, l.corpus[docID]))
+            qFreq[i] = float64(countTermFreq(q, o.corpus[docID]))
         }
 
-        idf, err := l.IDF(q)
+        idf, err := o.IDF(q)
         if err != nil {
-            if l.logger != nil {
-                l.logger.Printf("Error calculating IDF for term '%s': %v", q, err)
+            if o.logger != nil {
+                o.logger.Printf("Error calculating IDF for term '%s': %v", q, err)
             }
             continue
         }
 
         for i, docID := range docIDs {
-            if docID < 0 || docID >= l.corpusSize {
+            if docID < 0 || docID >= o.corpusSize {
                 continue
             }
-            docLen := l.docLengths[docID]
-            k := l.k1 * (1 - l.b + l.b*float64(docLen)/l.avgDocLen)
+            docLen := o.docLengths[docID]
+            k := o.k1 * (1 - o.b + o.b*float64(docLen)/o.avgDocLen)
             scores[i] += idf * (qFreq[i] / (qFreq[i] + k))
         }
     }
@@ -109,19 +109,19 @@ func (l *BM25L) GetBatchScores(query []string, docIDs []int) ([]float64, error) 
 }
 
 // GetTopN returns the top N documents for the given query.
-func (l *BM25L) GetTopN(query []string, n int) ([]string, error) {
+func (o *BM25Okapi) GetTopN(query []string, n int) ([]string, error) {
     if len(query) == 0 {
         return nil, errors.New("query cannot be empty")
     }
 
     if n <= 0 {
-        if l.logger != nil {
-            l.logger.Printf("Invalid value for n: %d. Returning empty slice.", n)
+        if o.logger != nil {
+            o.logger.Printf("Invalid value for n: %d. Returning empty slice.", n)
         }
         return []string{}, nil
     }
 
-    scores, err := l.GetScores(query)
+    scores, err := o.GetScores(query)
     if err != nil {
         return nil, err
     }
@@ -130,7 +130,7 @@ func (l *BM25L) GetTopN(query []string, n int) ([]string, error) {
 
     topDocs := make([]string, len(topNIndices))
     for i, idx := range topNIndices {
-        topDocs[i] = joinTokens(l.corpus[idx])
+        topDocs[i] = joinTokens(o.corpus[idx])
     }
 
     return topDocs, nil
